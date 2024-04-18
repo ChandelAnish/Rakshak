@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Management Web Project</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Disaster Management Web Project</h1>
+    <div id="map"></div>
+    <div id="disasters"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const map = L.map('map').setView([0, 0], 2); // Initialize Leaflet map
+
+            // Add a tile layer to the map (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            const disastersElement = document.getElementById("disasters");
+
+            // Function to fetch data from GDACS API
+            const fetchData = async () => {
+                try {
+                    const response = await fetch("https://www.gdacs.org/rss.aspx?profile=ARCHIVE&from=2023-01-01&to=2023-12-31");
+                    const xmlData = await response.text();
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlData, "text/xml");
+                    const items = xmlDoc.querySelectorAll("item");
+                    const disasters = [];
+                    items.forEach((item) => {
+                        const title = item.querySelector("title").textContent;
+                        const description = item.querySelector("description").textContent;
+                        const link = item.querySelector("link").textContent;
+                        const pubDate = new Date(item.querySelector("pubDate").textContent);
+                        const geoPoint = item.querySelector("georss\\:point").textContent.split(" ");
+                        const latitude = parseFloat(geoPoint[0]);
+                        const longitude = parseFloat(geoPoint[1]);
+                        disasters.push({ title, description, link, pubDate, latitude, longitude });
+                    });
+                    return disasters;
+                } catch (error) {
+                    console.error("Error fetching data:", error);
+                    return null;
+                }
+            };
+
+            // Function to display disasters
+            const displayDisasters = (disasters) => {
+                disastersElement.innerHTML = ""; // Clear previous disasters
+
+                disasters.forEach((disaster) => {
+                    const disasterElement = document.createElement("div");
+                    disasterElement.innerHTML = `
+                        <h2>${disaster.title}</h2>
+                        <p><strong>Date:</strong> ${disaster.pubDate.toLocaleString()}</p>
+                        <p><strong>Description:</strong> ${disaster.description}</p>
+                        <p><a href="${disaster.link}" target="_blank">More Info</a></p>
+                    `;
+                    disastersElement.appendChild(disasterElement);
+
+                    // Add marker to the map for each disaster
+                    L.marker([disaster.latitude, disaster.longitude])
+                        .addTo(map)
+                        .bindPopup(`<b>${disaster.title}</b><br>${disaster.description}`);
+                });
+            };
+
+            // Initialize the app
+            const init = async () => {
+                const disasterData = await fetchData();
+                if (disasterData) {
+                    displayDisasters(disasterData);
+                } else {
+                    disastersElement.innerHTML = "<p>No disasters found.</p>";
+                }
+            };
+
+            // Call init function to start the app
+            init();
+        });
+    </script>
+</body>
+</html>
